@@ -35,11 +35,11 @@ parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('--DATASET_X', type=str, default='mixtureGaussian', help='which dataset to use for X')
 parser.add_argument('--DATASET_Y', type=str, default='StandardGaussian', help='which dataset to use for Y')
 
-parser.add_argument('--INPUT_DIM', type=int, default=784, help='dimensionality of the input x')
+parser.add_argument('--INPUT_DIM', type=int, default=5, help='dimensionality of the input x')
 
 parser.add_argument('--BATCH_SIZE', type=int, default=60, help='size of the batches')
 
-parser.add_argument('--epochs', type=int, default=40, metavar='S',
+parser.add_argument('--epochs', type=int, default=10, metavar='S',
                     help='number_of_epochs')
 
 parser.add_argument('--N_GENERATOR_ITERS', type=int, default=16, help='number of training steps for discriminator per iter')
@@ -89,7 +89,7 @@ parser.add_argument('--DRAW_THE_ARROWS', type=bool, default=False, help='Whether
 parser.add_argument('--N_PLOT', type=int, default=16, help='number of samples for plotting')
 
 parser.add_argument('--SCALE', type=float, default=10.0, help='scale for the gaussian_mixtures')
-parser.add_argument('--VARIANCE', type=float, default=0.5, help='variance for each mixture')
+parser.add_argument('--VARIANCE', type=float, default=0.05, help='variance for each mixture')
 
 parser.add_argument('--N_TEST', type=int, default=2048, help='number of test samples')
 
@@ -141,9 +141,33 @@ kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 ################################################################
 # Data stuff
 
-mu = args.SCALE * torch.ones(1, args.INPUT_DIM)
+def unit_nd_sphere_cont(n, dim = args.INPUT_DIM):
+    mean = np.zeros(dim)
+    covariance = np.eye(dim)
+    sample = np.random.multivariate_normal(mean = mean, cov = covariance, size = n)
+    norm_const = np.sqrt(np.sum(sample**2, axis = 1))
+    sphere_sample = sample/norm_const[:, None]
+    return sphere_sample
 
-X_data = mu + torch.randn(60000, args.INPUT_DIM)
+def unit_nd_sphere_disc(n, centers, dim = args.INPUT_DIM):
+    sample_int = np.random.choice(range(len(centers)), size = n)
+    sample_sphere = np.zeros((n, dim))
+    for i in range(n):
+        sample_sphere[i, :] = centers[sample_int[i], :]
+    return sample_sphere
+
+
+centers = unit_nd_sphere_cont(n = 2**args.INPUT_DIM)
+# centers = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
+mu = unit_nd_sphere_disc(n = 600, centers = centers)
+mu = np.tile(mu, (100, 1))
+mu = torch.from_numpy(mu).float()
+X_data = mu + args.VARIANCE * torch.randn(60000, args.INPUT_DIM)
+
+
+# mu = args.SCALE * torch.ones(1, args.INPUT_DIM)
+#
+# X_data = mu + torch.randn(60000, args.INPUT_DIM)
 
 train_loader = torch.utils.data.DataLoader(X_data, batch_size=args.BATCH_SIZE, shuffle=True, **kwargs)
 
@@ -338,7 +362,11 @@ def train(epoch):
 
         real_data = Variable(real_data)
 
-        y = Variable(torch.randn(args.BATCH_SIZE, args.INPUT_DIM), requires_grad= True)
+        sphere_disc = unit_nd_sphere_cont(n = args.BATCH_SIZE)
+        Y_data = torch.from_numpy(sphere_disc).float() + args.VARIANCE * torch.randn(args.BATCH_SIZE, args.INPUT_DIM)
+        y = Variable(Y_data, requires_grad = True)
+
+        # y = Variable(torch.randn(args.BATCH_SIZE, args.INPUT_DIM), requires_grad= True)
 
         if args.cuda:
             y = y.cuda()

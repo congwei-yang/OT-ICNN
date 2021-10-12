@@ -40,7 +40,7 @@ parser.add_argument('--INPUT_DIM', type=int, default=728, help='dimensionality o
 
 parser.add_argument('--BATCH_SIZE', type=int, default=60, help='size of the batches')
 
-parser.add_argument('--epochs', type=int, default=50, metavar='S',
+parser.add_argument('--epochs', type=int, default=10, metavar='S',
                     help='number_of_epochs')
 
 parser.add_argument('--N_GENERATOR_ITERS', type=int, default=25, help='number of training steps for discriminator per iter')

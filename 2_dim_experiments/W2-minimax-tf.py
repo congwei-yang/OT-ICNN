@@ -21,31 +21,31 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]="0,3"  # specify which GPU(s) to be used
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--DATASET_X', type=str, default='8gaussians', help='which dataset to use for X')
-parser.add_argument('--DATASET_Y', type=str, default='simpleGaussian', help='which dataset to use for Y')
+parser.add_argument('--DATASET_X', type=str, default='4gaussians', help='which dataset to use for X')
+parser.add_argument('--DATASET_Y', type=str, default='circ_cont', help='which dataset to use for Y')
 
 parser.add_argument('--SHOW_THE_PLOT', type=bool, default=False, help='Boolean option to show the plots or not')
 parser.add_argument('--DRAW_THE_ARROWS', type=bool, default=False, help='Whether to draw transport arrows or not')
 
-parser.add_argument('--TRIAL', type=int, default=1, help='the trail no.')
+parser.add_argument('--TRIAL', type=int, default=20, help='the trail no.')
 
-parser.add_argument('--LAMBDA', type=float, default=1, help='Regularization constant for positive weight constraints')
+parser.add_argument('--LAMBDA', type=float, default=10, help='Regularization constant for positive weight constraints')
 
-parser.add_argument('--NUM_NEURON', type=int, default=64, help='number of neurons per layer')
+parser.add_argument('--NUM_NEURON', type=int, default=32, help='number of neurons per layer')
 
 parser.add_argument('--NUM_LAYERS', type=int, default=4, help='number of hidden layers before output')
 
-parser.add_argument('--LR', type=float, default=1e-4, help='learning rate')
+parser.add_argument('--LR', type=float, default=1e-5, help='learning rate')
 
 
-parser.add_argument('--ITERS', type=int, default=100000, help='number of iterations of training')
+parser.add_argument('--ITERS', type=int, default=20000, help='number of iterations of training')
 
 parser.add_argument('--BATCH_SIZE', type=int, default=1024, help='size of the batches')
 
-parser.add_argument('--SCALE', type=float, default=5.0, help='scale for the gaussian_mixtures')
-parser.add_argument('--VARIANCE', type=float, default=0.5, help='variance for each mixture')
+parser.add_argument('--SCALE', type=float, default=1.0, help='scale for the gaussian_mixtures')
+parser.add_argument('--VARIANCE', type=float, default=0.7, help='variance for each mixture')
 
-parser.add_argument('--N_TEST', type=int, default=2048, help='number of test samples')
+parser.add_argument('--N_TEST', type=int, default=4096, help='number of test samples')
 parser.add_argument('--N_PLOT', type=int, default=512, help='number of samples for plotting')
 parser.add_argument('--N_CPU', type=int, default=8, help='number of cpu threads to use during batch generation')
 parser.add_argument('--INPUT_DIM', type=int, default=2, help='dimensionality of the input x')
@@ -53,7 +53,7 @@ parser.add_argument('--N_GENERATOR_ITERS', type=int, default=10, help='number of
 
 opt = parser.parse_args()
 print(opt)
-
+tf.random.set_random_seed(seed = 2)
 def main():
 
 	# specify the convex function class
@@ -155,7 +155,7 @@ class ComputeOT:
 	
 	def learn(self, batch_size, iters, inner_loop_iterations, scale, variance, dataset_x, dataset_y, plot_size, experiment_name, opt):
 	   
-		print_T = 10
+		print_T = 100
 
 		save_figure_iterations = 1000
 		
@@ -203,7 +203,14 @@ class ComputeOT:
 			if (iteration+1) % save_figure_iterations==0:
 			
 				self.save_the_figure(iteration+1, X_plot, Y_plot, experiment_name, opt)
-					
+
+				# SET_PARAMS_NAME = str(opt.BATCH_SIZE) + '_batch' + str(opt.NUM_NEURON) + '_neurons' + str(
+				# 	opt.NUM_LAYERS) + '_layers'
+				# EXPERIMENT_NAME = opt.DATASET_X
+				# saver = tf.train.Saver()
+				# with tf.Session() as sess:
+				# 	saver.save(sess, "saving_model/{0}/model-{1}.ckpt".format(EXPERIMENT_NAME, opt.TRIAL, SET_PARAMS_NAME+  str(opt.ITERS) + '_iters'))
+				#
 	
 	def transport_X_to_Y(self, X):
 		
@@ -262,7 +269,7 @@ class ComputeOT:
 																		 opt.SCALE, opt.VARIANCE,opt.LAMBDA, opt.LR ,opt.TRIAL,
 																		  str(iteration)))
 
-		print("Plot saved at iteration {0}".format(iteration))
+		# print("Plot saved at iteration {0}".format(iteration))
 		
 class Kantorovich_Potential:
 	''' 
@@ -282,7 +289,7 @@ class Kantorovich_Potential:
 		# list of matrices that interacts with input
 		self.A = []
 		for k in range(0, self.num_hidden_layers):
-			self.A.append(tf.Variable(tf.random_uniform([self.input_size, hidden_size_list[k]], maxval=0.1), dtype=tf.float32))
+			self.A.append(tf.Variable(tf.random_uniform([self.input_size, hidden_size_list[k]], maxval=0.1, seed = 2), dtype=tf.float32))
 
 		# list of bias vectors at each hidden layer 
 		self.b = []
@@ -292,7 +299,7 @@ class Kantorovich_Potential:
 		# list of matrices between consecutive layers
 		self.W = []
 		for k in range(1, self.num_hidden_layers):
-			self.W.append(tf.Variable(tf.random_uniform([hidden_size_list[k-1], hidden_size_list[k]], maxval=0.1), dtype=tf.float32))
+			self.W.append(tf.Variable(tf.random_uniform([hidden_size_list[k-1], hidden_size_list[k]], maxval=0.1, seed = 2), dtype=tf.float32))
 		
 		self.var_list = self.A +  self.b + self.W
 
@@ -320,6 +327,21 @@ class Kantorovich_Potential:
 		return z
 
 
+def unit_nd_sphere_cont(n, dim = 2):
+    mean = np.zeros(dim)
+    covariance = np.eye(dim)
+    sample = np.random.multivariate_normal(mean = mean, cov = covariance, size = n)
+    norm_const = np.sqrt(np.sum(sample**2, axis = 1))
+    sphere_sample = sample/norm_const[:, None]
+    return sphere_sample
+
+def unit_nd_sphere_disc(n, centers, dim = 2):
+    sample_int = np.random.choice(range(len(centers)), size = n)
+    sample_sphere = np.zeros((n, dim))
+    for i in range(n):
+        sample_sphere[i, :] = centers[sample_int[i], :]
+    return sample_sphere
+
 def sample_data_gen(DATASET, BATCH_SIZE, SCALE , VARIANCE):
 	
 	'''
@@ -338,7 +360,43 @@ def sample_data_gen(DATASET, BATCH_SIZE, SCALE , VARIANCE):
 		#dataset /= 1.414 # stdev
 		yield dataset
 	'''
-	if DATASET == '25gaussians':
+	if DATASET == 'circ_cont':
+
+		variance = VARIANCE
+
+		centers = []
+		for j in range(10000):
+			center = np.random.randn(2)
+			centers.append(center / np.sqrt(center[0]**2 + center[1]**2))
+		while True:
+			dataset = []
+			for i in range(BATCH_SIZE):
+				point = np.random.randn(2)*variance
+				c = random.choice(centers)
+				point[0] += c[0]
+				point[1] += c[1]
+				dataset.append(point)
+			dataset = np.array(dataset, dtype='float32')
+			yield dataset
+
+	elif DATASET == 'circ_disc':
+
+		centers = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
+		circ_disc = unit_nd_sphere_disc(BATCH_SIZE, centers)
+		variance = VARIANCE
+		while True:
+			dataset = []
+			for i in range(BATCH_SIZE):
+				Gauss_point = np.random.randn(2)*variance
+				point = random.choice(centers)
+				point[0] += Gauss_point[0]
+				point[1] += Gauss_point[1]
+				dataset.append(point)
+			dataset = np.array(dataset, dtype='float32')
+			yield dataset
+
+
+	elif DATASET == '25gaussians':
 		
 		dataset = []
 		for i in range(100000/25):
@@ -365,6 +423,26 @@ def sample_data_gen(DATASET, BATCH_SIZE, SCALE , VARIANCE):
 			data = data.astype('float32')[:, [0, 2]]
 			#data /= 7.5 # stdev plus a little
 			yield data
+
+	elif DATASET == '4gaussians':
+		variance = VARIANCE
+		centers = [
+			(1, 0),
+			(-1, 0),
+			(0, 1),
+			(0, -1)
+		]
+		centers = [(x, y) for x, y in centers]
+		while True:
+			dataset = []
+			for i in range(BATCH_SIZE):
+				point = np.random.randn(2)*variance
+				center = random.choice(centers)
+				point[0] += center[0]
+				point[1] += center[1]
+				dataset.append(point)
+			dataset = np.array(dataset, dtype = 'float32')
+			yield dataset
 
 	elif DATASET == '8gaussians':
 	
@@ -422,10 +500,12 @@ def sample_data_gen(DATASET, BATCH_SIZE, SCALE , VARIANCE):
 
 	elif DATASET =='simpleGaussian':
 
+		variance = VARIANCE
+
 		while True:
 			dataset = []
 			for i in range(BATCH_SIZE):
-				point = np.random.randn(2)
+				point = np.random.randn(2) * variance
 				dataset.append(point)
 			dataset = np.array(dataset, dtype='float32')
 			#dataset /= 1.414 # stdev
