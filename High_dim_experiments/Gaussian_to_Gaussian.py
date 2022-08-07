@@ -35,7 +35,7 @@ parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('--DATASET_X', type=str, default='mixtureGaussian', help='which dataset to use for X')
 parser.add_argument('--DATASET_Y', type=str, default='StandardGaussian', help='which dataset to use for Y')
 
-parser.add_argument('--INPUT_DIM', type=int, default=5, help='dimensionality of the input x')
+parser.add_argument('--INPUT_DIM', type=int, default=3, help='dimensionality of the input x')
 
 parser.add_argument('--BATCH_SIZE', type=int, default=60, help='size of the batches')
 
@@ -58,7 +58,7 @@ parser.add_argument('--TRIAL', type=int, default=1, help='the trail no.')
 
 parser.add_argument('--optimizer', type=str, default='Adam', help='which optimizer to use')
 
-parser.add_argument('--LR', type=float, default=1e-4, help='learning rate')
+parser.add_argument('--LR', type=float, default=5e-4, help='learning rate')
 
 parser.add_argument('--momentum', type=float, default=0.0, metavar='M',
                     help='SGD momentum (default: 0.5)')
@@ -89,9 +89,9 @@ parser.add_argument('--DRAW_THE_ARROWS', type=bool, default=False, help='Whether
 parser.add_argument('--N_PLOT', type=int, default=16, help='number of samples for plotting')
 
 parser.add_argument('--SCALE', type=float, default=10.0, help='scale for the gaussian_mixtures')
-parser.add_argument('--VARIANCE', type=float, default=0.05, help='variance for each mixture')
+parser.add_argument('--VARIANCE', type=float, default=0, help='variance for each mixture')
 
-parser.add_argument('--N_TEST', type=int, default=2048, help='number of test samples')
+parser.add_argument('--N_TEST', type=int, default=60000, help='number of test samples')
 
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
@@ -157,10 +157,10 @@ def unit_nd_sphere_disc(n, centers, dim = args.INPUT_DIM):
     return sample_sphere
 
 
-centers = unit_nd_sphere_cont(n = 2**args.INPUT_DIM)
-# centers = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
-mu = unit_nd_sphere_disc(n = 600, centers = centers)
-mu = np.tile(mu, (100, 1))
+# centers = unit_nd_sphere_cont(n = 2**args.INPUT_DIM)
+centers = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [-1, 0, 0], [0, -1, 0], [0, 0, -1]])
+mu = unit_nd_sphere_disc(n = 60000, centers = centers)
+# mu = np.tile(mu, (100, 1))
 mu = torch.from_numpy(mu).float()
 X_data = mu + args.VARIANCE * torch.randn(60000, args.INPUT_DIM)
 
@@ -362,8 +362,8 @@ def train(epoch):
 
         real_data = Variable(real_data)
 
-        sphere_disc = unit_nd_sphere_cont(n = args.BATCH_SIZE)
-        Y_data = torch.from_numpy(sphere_disc).float() + args.VARIANCE * torch.randn(args.BATCH_SIZE, args.INPUT_DIM)
+        sphere_cont = unit_nd_sphere_cont(n = args.BATCH_SIZE)
+        Y_data = torch.from_numpy(sphere_cont).float() + args.VARIANCE * torch.randn(args.BATCH_SIZE, args.INPUT_DIM)
         y = Variable(Y_data, requires_grad = True)
 
         # y = Variable(torch.randn(args.BATCH_SIZE, args.INPUT_DIM), requires_grad= True)
@@ -613,42 +613,50 @@ logging.info("Training is finished and the models and plots are saved. Good job 
 #########
 ### Checking stuff
 
+mu2 = unit_nd_sphere_disc(n = args.N_TEST, centers = centers)
+# mu = np.tile(mu, (100, 1))
+mu2 = torch.from_numpy(mu2).float()
+X_data_test = mu + args.VARIANCE * torch.randn(args.N_TEST, args.INPUT_DIM)
+X_data_test_var = Variable(X_data_test, requires_grad = True)
+if args.cuda:
+    real_data = X_data_test_var.cuda()
 
-# if args.cuda:
-#     real_data = first_batch_data.cuda()
-#
-# real_data = Variable(real_data)
-#
+real_data = Variable(X_data_test)
+
+sphere_cont_test = unit_nd_sphere_cont(n = 60000)
+Y_data_test = torch.from_numpy(sphere_cont_test).float() + args.VARIANCE * torch.randn(60000, args.INPUT_DIM)
+y = Variable(Y_data_test, requires_grad = True)
+
 # y = Variable(torch.randn(args.BATCH_SIZE, args.INPUT_DIM), requires_grad=True)
-# if args.cuda:
-#     y = y.cuda()
-#
-# g_of_y = convex_g(y).sum()
-#
-# grad_g_of_y = torch.autograd.grad(g_of_y, y, create_graph=True)[0]
-#
-# f_grad_g_y = convex_f(grad_g_of_y).mean()
-#
-# loss_g = f_grad_g_y - torch.dot(grad_g_of_y.reshape(-1), y.reshape(-1)) / y.size(0)
-# loss_g.backward()
-#
-# g_positive_constraint_loss = compute_constraint_loss(g_positive_params)
-# g_positive_constraint_loss.backward()
-#
-# optimizer_g.step()
-#
-# for p in list(convex_f.parameters()):
-#     p.grad.copy_(-p.grad)
-#
-# remaining_f_loss = convex_f(real_data).mean()
-# remaining_f_loss.backward()
-#
-# optimizer_f.step()
-#
-# w_2_loss_value = loss_g.item() - remaining_f_loss.item() + 0.5 * real_data.pow(2).sum(
-#     dim=1).mean().item() + 0.5 * y.pow(2).sum(dim=1).mean().item()
-#
-# for p in f_positive_params:
-#     p.data.copy_(torch.relu(p.data))
-#
-# print(w_2_loss_value)
+if args.cuda:
+    y = y.cuda()
+
+g_of_y = convex_g(y).sum()
+
+grad_g_of_y = torch.autograd.grad(g_of_y, y, create_graph=True)[0]
+
+f_grad_g_y = convex_f(grad_g_of_y).mean()
+
+loss_g = f_grad_g_y - torch.dot(grad_g_of_y.reshape(-1), y.reshape(-1)) / y.size(0)
+loss_g.backward()
+
+g_positive_constraint_loss = compute_constraint_loss(g_positive_params)
+g_positive_constraint_loss.backward()
+
+optimizer_g.step()
+
+for p in list(convex_f.parameters()):
+     p.grad.copy_(-p.grad)
+
+remaining_f_loss = convex_f(real_data).mean()
+remaining_f_loss.backward()
+
+optimizer_f.step()
+
+w_2_loss_value = loss_g.item() - remaining_f_loss.item() + 0.5 * real_data.pow(2).sum(
+     dim=1).mean().item() + 0.5 * y.pow(2).sum(dim=1).mean().item()
+
+for p in f_positive_params:
+    p.data.copy_(torch.relu(p.data))
+
+print(w_2_loss_value)
